@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"log"
+	"mime/multipart"
 	"os"
 
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
+	"github.com/google/uuid"
 )
 
 type ImageRepository struct {
@@ -36,4 +38,12 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 		firestoreClient: *firestoreClient,
 		gcsClient:       *gcsClient,
 	}, nil
+}
+
+func (i *ImageRepository) UploadImage(file *multipart.FileHeader) error {
+	ctx := context.Background()
+	bkt := i.gcsClient.Bucket("images")
+	filename := uuid.New()
+	bkt.Object(filename.String()).NewWriter(ctx)
+	return nil
 }

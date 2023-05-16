@@ -1,11 +1,13 @@
 package port
 
-import "image-service/core/domain"
+import (
+	"mime/multipart"
+)
 
 type ImageService interface {
-	UploadImage(domain.Image) error
+	UploadImage(*multipart.FileHeader) error
 }
 
 type ImageRepository interface {
-	UploadImage(domain.Image) error
+	UploadImage(*multipart.FileHeader) error
 }
