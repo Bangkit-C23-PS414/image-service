@@ -46,18 +46,28 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(file *multipart.File) error {
+func (i *ImageRepository) UploadImage(username string, file *multipart.File) error {
 	ctx := context.Background()
 	filename := uuid.New()
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	w := i.gcsClient.Bucket(bktName).Object("images/" + filename.String()).NewWriter(ctx)
 	_, err := io.Copy(w, *file)
 	if err != nil {
-		log.Printf("error writing to gcs bucket with error %v \n", err)
+		log.Printf("[ImageRepository.UploadImage] error writing to gcs bucket with error %v \n", err)
 		return err
 	}
-	if err = w.Close(); err != nil{
-		log.Printf("error closing file with error %v \n", err)
+	if err = w.Close(); err != nil {
+		log.Printf("[ImageRepository.UploadImage] error closing file with error %v \n", err)
+		return err
+	}
+
+	// TODO: this code still return code = PermissionDenied desc = Missing or insufficient permissions, fix this later
+	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, map[string]interface{}{
+		"Filename": filename.String(),
+		"Username": username,
+	})
+	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
 		return err
 	}
 	return nil

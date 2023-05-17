@@ -16,8 +16,8 @@ func NewImageService(repo port.ImageRepository) *ImageService {
 	}
 }
 
-func (i *ImageService) UploadImage(image *multipart.File) error {
-	err := i.repo.UploadImage(image)
+func (i *ImageService) UploadImage(username string, image *multipart.File) error {
+	err := i.repo.UploadImage(username, image)
 	if err != nil {
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
 		return err
