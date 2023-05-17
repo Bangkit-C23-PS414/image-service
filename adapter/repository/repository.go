@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"io"
 	"log"
 	"mime/multipart"
 	"os"
@@ -17,6 +18,11 @@ type ImageRepository struct {
 }
 
 func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
+	gcsSAFile, err := os.Open("gcs-sa-key.json")
+	if err != nil {
+		log.Fatalf("[NewImageRepository] unable to open %v with error %v \n", gcsSAFile.Name(), err)
+	}
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", gcsSAFile.Name())
 	projectId := os.Getenv("CAPSTONE_PROJECT_ID")
 	if projectId == "" {
 		log.Fatalf("[NewImageRepository] empty project ID")
@@ -40,10 +46,19 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(file *multipart.FileHeader) error {
+func (i *ImageRepository) UploadImage(file *multipart.File) error {
 	ctx := context.Background()
-	bkt := i.gcsClient.Bucket("images")
 	filename := uuid.New()
-	bkt.Object(filename.String()).NewWriter(ctx)
+	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
+	w := i.gcsClient.Bucket(bktName).Object("images/" + filename.String()).NewWriter(ctx)
+	_, err := io.Copy(w, *file)
+	if err != nil {
+		log.Printf("error writing to gcs bucket with error %v \n", err)
+		return err
+	}
+	if err = w.Close(); err != nil{
+		log.Printf("error closing file with error %v \n", err)
+		return err
+	}
 	return nil
 }

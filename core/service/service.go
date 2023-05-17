@@ -2,6 +2,7 @@ package service
 
 import (
 	"image-service/core/port"
+	"log"
 	"mime/multipart"
 )
 
@@ -15,7 +16,11 @@ func NewImageService(repo port.ImageRepository) *ImageService {
 	}
 }
 
-func (i *ImageService) UploadImage(image *multipart.FileHeader) error {
-	i.repo.UploadImage(image)
+func (i *ImageService) UploadImage(image *multipart.File) error {
+	err := i.repo.UploadImage(image)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
+		return err
+	}
 	return nil
 }

@@ -5,9 +5,9 @@ import (
 )
 
 type ImageService interface {
-	UploadImage(*multipart.FileHeader) error
+	UploadImage(*multipart.File) error
 }
 
 type ImageRepository interface {
-	UploadImage(*multipart.FileHeader) error
+	UploadImage(*multipart.File) error
 }

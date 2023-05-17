@@ -31,12 +31,18 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 	fileContentType := h.Header.Get("Content-Type")
-	if fileContentType != "image/jpeg" || fileContentType != "image/png" {
+	if fileContentType != "image/jpg" && fileContentType != "image/jpeg" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	i.imageService.UploadImage(h)
+	err = i.imageService.UploadImage(&file)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UploadImage] error when uploading image with error %v \n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func InitHttpServer(imageService service.ImageService) {
