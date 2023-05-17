@@ -34,7 +34,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] fail to read from file with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
-			Message: `Form data should be "image"`,
+			Message: "error read image",
 		})
 		w.WriteHeader(http.StatusInternalServerError)
 		return

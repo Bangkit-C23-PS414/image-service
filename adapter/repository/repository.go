@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"image-service/core/domain"
 	"io"
 	"log"
 	"mime/multipart"
@@ -10,6 +11,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
+	"google.golang.org/api/option"
 )
 
 type ImageRepository struct {
@@ -18,23 +20,20 @@ type ImageRepository struct {
 }
 
 func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
-	gcsSAFile, err := os.Open("gcs-sa-key.json")
-	if err != nil {
-		log.Fatalf("[NewImageRepository] unable to open %v with error %v \n", gcsSAFile.Name(), err)
-	}
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", gcsSAFile.Name())
 	projectId := os.Getenv("CAPSTONE_PROJECT_ID")
 	if projectId == "" {
 		log.Fatalf("[NewImageRepository] empty project ID")
 	}
 
-	firestoreClient, err := firestore.NewClient(ctx, projectId)
+	firestoreOpt := option.WithCredentialsFile("firestore-sa-key.json")
+	firestoreClient, err := firestore.NewClient(ctx, projectId, firestoreOpt)
 	if err != nil {
 		log.Fatalf("[NewImageRepository] fail to initialize firestore client with error %v \n", err)
 		return nil, err
 	}
 
-	gcsClient, err := storage.NewClient(ctx)
+	gcsOpt := option.WithCredentialsFile("gcs-sa-key.json")
+	gcsClient, err := storage.NewClient(ctx, gcsOpt)
 	if err != nil {
 		log.Fatalf("[NewImageRepository] fail to initialize cloud storage client with error %v \n", err)
 		return nil, err
@@ -61,10 +60,9 @@ func (i *ImageRepository) UploadImage(username string, file *multipart.File) err
 		return err
 	}
 
-	// TODO: this code still return code = PermissionDenied desc = Missing or insufficient permissions, fix this later
-	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, map[string]interface{}{
-		"Filename": filename.String(),
-		"Username": username,
+	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, domain.Image{
+		Filename: filename.String(),
+		Username: username,
 	})
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
