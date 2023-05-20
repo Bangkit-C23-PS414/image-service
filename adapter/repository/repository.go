@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime/multipart"
 	"os"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
@@ -60,10 +61,12 @@ func (i *ImageRepository) UploadImage(username string, file *multipart.File) err
 		return err
 	}
 
-	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, domain.Image{
-		Filename: filename.String(),
-		Username: username,
+	_, err = i.firestoreClient.Collection("users").Doc(username).Collection("image-detections").Doc(filename.String()).Set(ctx, domain.Image{
+		Label:         "",
+		InferenceTime: 0,
+		UploadedAt:    time.Now(),
 	})
+
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
 		return err
