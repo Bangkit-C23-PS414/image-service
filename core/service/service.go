@@ -1,6 +1,7 @@
 package service
 
 import (
+	"image-service/core/domain"
 	"image-service/core/port"
 	"log"
 	"mime/multipart"
@@ -23,4 +24,13 @@ func (i *ImageService) UploadImage(username string, image *multipart.File) error
 		return err
 	}
 	return nil
+}
+
+func (i *ImageService) GetDetectionResults(username string) ([]domain.Image, error) {
+	res, err := i.repo.GetDetectionResults(username)
+	if err != nil {
+		log.Printf("[ImageService.GetDetectionResults] error when retrieve detection results with error %v \n", err)
+		return nil, err
+	}
+	return res, nil
 }

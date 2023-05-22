@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"image-service/core/domain"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -61,15 +63,54 @@ func (i *ImageRepository) UploadImage(username string, file *multipart.File) err
 		return err
 	}
 
-	_, err = i.firestoreClient.Collection("users").Doc(username).Collection("image-detections").Doc(filename.String()).Set(ctx, domain.Image{
-		Label:         "",
-		InferenceTime: 0,
-		UploadedAt:    time.Now(),
+	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, domain.Image{
+		Username:   username,
+		Filename:   filename.String(),
+		UploadedAt: time.Now(),
 	})
 
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
 		return err
 	}
+
 	return nil
+}
+
+func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, error) {
+	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
+	gcsOpt := &storage.SignedURLOptions{
+		Scheme:  storage.SigningSchemeV4,
+		Method:  "GET",
+		Expires: time.Now().Add(1 * time.Minute),
+	}
+
+	result := []domain.Image{}
+	q := i.firestoreClient.Collection("images").Where("username", "==", username).Documents(context.Background())
+	for {
+		doc, err := q.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", doc.Data()["filename"]), gcsOpt)
+
+		if err != nil {
+			log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
+		}
+
+		data := domain.Image{
+			Username:      fmt.Sprint(doc.Data()["username"]),
+			Filename:      objectUrl,
+			Label:         fmt.Sprint(doc.Data()["label"]),
+			InferenceTime: doc.Data()["inferenceTime"].(int64),
+			UploadedAt:    doc.Data()["uploadedAt"].(time.Time),
+			DetectedAt:    doc.Data()["detectedAt"].(time.Time),
+		}
+		result = append(result, data)
+	}
+	return result, nil
 }

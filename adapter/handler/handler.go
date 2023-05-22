@@ -71,10 +71,39 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	username := r.FormValue("username")
+	if username == "" {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "username should be filled",
+		})
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	res, err := i.imageService.GetDetectionResults(username)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.GetDetectionResults] error when retrieve detection results with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error read image from database",
+		})
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpWriteResponse(w, domain.ServerResponse{
+		Message: "Success",
+		Data:    res,
+	})
+}
+
 func InitHttpServer(imageService service.ImageService) {
 	mux := http.NewServeMux()
 	imageHandler := NewImageHttpHandler(imageService)
 	mux.HandleFunc("/image-detections/create", imageHandler.UploadImage)
+	mux.HandleFunc("/image-detections", imageHandler.GetDetectionResults)
 	server := http.Server{
 		Addr:    ":8080",
 		Handler: mux,
