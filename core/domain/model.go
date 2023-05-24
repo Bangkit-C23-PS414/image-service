@@ -11,6 +11,12 @@ type Image struct {
 	DetectedAt    time.Time `firestore:"detectedAt"`
 }
 
+type UpdateImagePayload struct {
+	Filename      string `firestore:"filename,omitempty"`
+	Label         string `firestore:"label"`
+	InferenceTime int64  `firestore:"inferenceTime"`
+}
+
 type ServerResponse struct {
 	Message string `json:"Message,omitempty"`
 	Data    interface{}

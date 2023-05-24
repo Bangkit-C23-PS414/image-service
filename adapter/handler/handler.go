@@ -6,6 +6,7 @@ import (
 	"image-service/core/service"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type ImageHttpHandler struct {
@@ -99,11 +100,72 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 	})
 }
 
+func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	filename := r.FormValue("filename")
+	if filename == "" {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "filename should be filled",
+		})
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	label := r.FormValue("label")
+	if label == "" {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "label should be filled",
+		})
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	inferenceTime := r.FormValue("inferenceTime")
+	if inferenceTime == "" {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "inferenceTime should be filled",
+		})
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	intInferenceTime, err := strconv.ParseInt(inferenceTime, 10, 64)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error parsing inference time",
+		})
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	payload := domain.UpdateImagePayload{
+		Filename:      filename,
+		Label:         label,
+		InferenceTime: intInferenceTime,
+	}
+	err = i.imageService.UpdateImageResult(payload)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error when update detection with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error update result to database",
+		})
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpWriteResponse(w, domain.ServerResponse{
+		Message: "Success",
+	})
+}
+
 func InitHttpServer(imageService service.ImageService) {
 	mux := http.NewServeMux()
 	imageHandler := NewImageHttpHandler(imageService)
 	mux.HandleFunc("/image-detections/create", imageHandler.UploadImage)
-	mux.HandleFunc("/image-detections", imageHandler.GetDetectionResults)
+	mux.HandleFunc("/image-detections/fetch", imageHandler.GetDetectionResults)
+	mux.HandleFunc("/image-detections/update", imageHandler.UpdateImageResult)
 	server := http.Server{
 		Addr:    ":8080",
 		Handler: mux,

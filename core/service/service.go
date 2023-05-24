@@ -34,3 +34,12 @@ func (i *ImageService) GetDetectionResults(username string) ([]domain.Image, err
 	}
 	return res, nil
 }
+
+func (i *ImageService) UpdateImageResult(payload domain.UpdateImagePayload) error {
+	err := i.repo.UpdateImageResult(payload)
+	if err != nil {
+		log.Printf("[ImageService.UpdateImageResult] error update image result with error %v \n", err)
+		return err
+	}
+	return nil
+}

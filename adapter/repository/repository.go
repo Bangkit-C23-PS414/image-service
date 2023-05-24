@@ -82,7 +82,7 @@ func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, 
 	gcsOpt := &storage.SignedURLOptions{
 		Scheme:  storage.SigningSchemeV4,
 		Method:  "GET",
-		Expires: time.Now().Add(1 * time.Minute),
+		Expires: time.Now().Add(7 * 24 * time.Hour),
 	}
 
 	result := []domain.Image{}
@@ -100,6 +100,7 @@ func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, 
 
 		if err != nil {
 			log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
+			return nil, err
 		}
 
 		data := domain.Image{
@@ -113,4 +114,28 @@ func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, 
 		result = append(result, data)
 	}
 	return result, nil
+}
+
+func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
+	ctx := context.Background()
+	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
+		{
+			Path:  "detectedAt",
+			Value: time.Now(),
+		},
+		{
+			Path:  "inferenceTime",
+			Value: payload.InferenceTime,
+		},
+		{
+			Path:  "label",
+			Value: payload.Label,
+		},
+	})
+
+	if err != nil {
+		log.Printf("[ImageRepository.UpdateImageResult] error when update image result with error %v", err)
+		return err
+	}
+	return nil
 }
