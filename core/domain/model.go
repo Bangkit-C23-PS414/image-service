@@ -3,7 +3,7 @@ package domain
 import "time"
 
 type Image struct {
-	Username      string    `firestore:"username,omitempty"`
+	Email      string    `firestore:"email,omitempty"`
 	Filename      string    `firestore:"filename,omitempty"`
 	Label         string    `firestore:"label"`
 	InferenceTime int64     `firestore:"inferenceTime"`

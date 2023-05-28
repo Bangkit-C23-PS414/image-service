@@ -17,8 +17,8 @@ func NewImageService(repo port.ImageRepository) *ImageService {
 	}
 }
 
-func (i *ImageService) UploadImage(username string, image *multipart.File) error {
-	err := i.repo.UploadImage(username, image)
+func (i *ImageService) UploadImage(email string, image *multipart.File) error {
+	err := i.repo.UploadImage(email, image)
 	if err != nil {
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
 		return err
@@ -26,8 +26,8 @@ func (i *ImageService) UploadImage(username string, image *multipart.File) error
 	return nil
 }
 
-func (i *ImageService) GetDetectionResults(username string) ([]domain.Image, error) {
-	res, err := i.repo.GetDetectionResults(username)
+func (i *ImageService) GetDetectionResults(email string) ([]domain.Image, error) {
+	res, err := i.repo.GetDetectionResults(email)
 	if err != nil {
 		log.Printf("[ImageService.GetDetectionResults] error when retrieve detection results with error %v \n", err)
 		return nil, err

@@ -48,7 +48,7 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(username string, file *multipart.File) error {
+func (i *ImageRepository) UploadImage(email string, file *multipart.File) error {
 	ctx := context.Background()
 	filename := uuid.New()
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
@@ -64,7 +64,7 @@ func (i *ImageRepository) UploadImage(username string, file *multipart.File) err
 	}
 
 	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, domain.Image{
-		Username:   username,
+		Email:   email,
 		Filename:   filename.String(),
 		UploadedAt: time.Now(),
 	})
@@ -77,7 +77,7 @@ func (i *ImageRepository) UploadImage(username string, file *multipart.File) err
 	return nil
 }
 
-func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, error) {
+func (i *ImageRepository) GetDetectionResults(email string) ([]domain.Image, error) {
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	gcsOpt := &storage.SignedURLOptions{
 		Scheme:  storage.SigningSchemeV4,
@@ -86,7 +86,7 @@ func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, 
 	}
 
 	result := []domain.Image{}
-	q := i.firestoreClient.Collection("images").Where("username", "==", username).Documents(context.Background())
+	q := i.firestoreClient.Collection("images").Where("email", "==", email).Documents(context.Background())
 	for {
 		doc, err := q.Next()
 		if err == iterator.Done {
@@ -104,7 +104,7 @@ func (i *ImageRepository) GetDetectionResults(username string) ([]domain.Image, 
 		}
 
 		data := domain.Image{
-			Username:      fmt.Sprint(doc.Data()["username"]),
+			Email:      fmt.Sprint(doc.Data()["email"]),
 			Filename:      objectUrl,
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			InferenceTime: doc.Data()["inferenceTime"].(int64),

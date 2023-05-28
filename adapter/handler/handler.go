@@ -2,12 +2,19 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"image-service/core/domain"
 	"image-service/core/service"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+
+	"github.com/golang-jwt/jwt/v4"
 )
+
+var JWT_SIGNATURE_KEY = []byte(os.Getenv("JWT_SIGNATURE_KEY"))
 
 type ImageHttpHandler struct {
 	imageService service.ImageService
@@ -50,16 +57,16 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := r.FormValue("username")
-	if username == "" {
+	email := r.FormValue("email")
+	if email == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
-			Message: "username should be filled",
+			Message: "email should be filled",
 		})
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	err = i.imageService.UploadImage(username, &file)
+	err = i.imageService.UploadImage(email, &file)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] error when uploading image with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
@@ -77,15 +84,36 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	username := r.FormValue("username")
-	if username == "" {
-		httpWriteResponse(w, &domain.ServerResponse{
-			Message: "username should be filled",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+	authHeader := r.Header.Get("Authorization")
+	if !strings.Contains(authHeader, "Bearer") {
+		http.Error(w, "Invalid token", http.StatusBadRequest)
 		return
 	}
-	res, err := i.imageService.GetDetectionResults(username)
+
+	tokenString := strings.Replace(authHeader, "Bearer ", "", -1)
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+	if method, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		return nil, fmt.Errorf("invalid signing method")
+	} else if method != jwt.SigningMethodHS256 {
+		return nil, fmt.Errorf("invalid signing method")
+	}
+		return JWT_SIGNATURE_KEY, nil
+	})
+
+	if err != nil {
+		log.Printf("[Server.tokenHandler] unable to parse token with error %v \n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	claim, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		log.Printf("[Server.tokenHandler] token is invalid %v \n", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	email := fmt.Sprint(claim["email"])
+	res, err := i.imageService.GetDetectionResults(email)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.GetDetectionResults] error when retrieve detection results with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
