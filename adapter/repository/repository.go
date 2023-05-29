@@ -64,7 +64,7 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) error 
 	}
 
 	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, domain.Image{
-		Email:   email,
+		Email:      email,
 		Filename:   filename.String(),
 		UploadedAt: time.Now(),
 	})
@@ -77,7 +77,7 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) error 
 	return nil
 }
 
-func (i *ImageRepository) GetDetectionResults(email string) ([]domain.Image, error) {
+func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageFilter) ([]domain.Image, error) {
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	gcsOpt := &storage.SignedURLOptions{
 		Scheme:  storage.SigningSchemeV4,
@@ -104,7 +104,7 @@ func (i *ImageRepository) GetDetectionResults(email string) ([]domain.Image, err
 		}
 
 		data := domain.Image{
-			Email:      fmt.Sprint(doc.Data()["email"]),
+			Email:         fmt.Sprint(doc.Data()["email"]),
 			Filename:      objectUrl,
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			InferenceTime: doc.Data()["inferenceTime"].(int64),

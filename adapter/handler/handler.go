@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image-service/core/domain"
 	"image-service/core/service"
+	"image-service/core/util"
 	"log"
 	"net/http"
 	"os"
@@ -41,10 +42,10 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	file, h, err := r.FormFile("image")
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] fail to read from file with error %v \n", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "error read image",
 		})
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer file.Close()
@@ -92,11 +93,11 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 
 	tokenString := strings.Replace(authHeader, "Bearer ", "", -1)
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-	if method, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("invalid signing method")
-	} else if method != jwt.SigningMethodHS256 {
-		return nil, fmt.Errorf("invalid signing method")
-	}
+		if method, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("invalid signing method")
+		} else if method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("invalid signing method")
+		}
 		return JWT_SIGNATURE_KEY, nil
 	})
 
@@ -112,8 +113,10 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
+	filter := util.PageFilter(r)
 	email := fmt.Sprint(claim["email"])
-	res, err := i.imageService.GetDetectionResults(email)
+	res, err := i.imageService.GetDetectionResults(email, &filter)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.GetDetectionResults] error when retrieve detection results with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
