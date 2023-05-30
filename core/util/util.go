@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -27,6 +28,7 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	perPage, _ := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("perPage")))
 	startDate, _ := strconv.Atoi(req.URL.Query().Get("startDate"))
 	endDate, _ := strconv.Atoi(req.URL.Query().Get("endDate"))
+	labels := strings.Split(req.URL.Query().Get("labels"), ",")
 
 	var filterData = domain.PageFilter{}
 
@@ -34,6 +36,7 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	filterData.PerPage = perPage
 	filterData.StartDate = startDate
 	filterData.EndDate = endDate
+	filterData.Labels = labels
 
 	if perPage == 0 {
 		filterData.PerPage = MinPageSize

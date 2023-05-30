@@ -25,8 +25,9 @@ type UserData struct {
 }
 
 type PageFilter struct {
-	Page      int `json:"page"`
-	PerPage   int `json:"perPage"`
-	StartDate int `json:"startDate"`
-	EndDate   int `json:"endDate"`
+	Page      int      `json:"page"`
+	PerPage   int      `json:"perPage"`
+	StartDate int      `json:"startDate"`
+	EndDate   int      `json:"endDate"`
+	Labels    []string `json:"labels"`
 }

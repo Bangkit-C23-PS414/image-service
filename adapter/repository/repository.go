@@ -88,35 +88,13 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	result := []domain.Image{}
 
 	q := i.firestoreClient.Collection("images").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
+
 	if filter.StartDate != 0 && filter.EndDate != 0 {
-		res := q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate).Limit(filter.PerPage).Documents(context.Background())
-		for {
-			doc, err := res.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
+		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
+	}
 
-			objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", doc.Data()["filename"]), gcsOpt)
-
-			if err != nil {
-				log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
-				return nil, err
-			}
-
-			data := domain.Image{
-				Email:         fmt.Sprint(doc.Data()["email"]),
-				Filename:      objectUrl,
-				Label:         fmt.Sprint(doc.Data()["label"]),
-				InferenceTime: doc.Data()["inferenceTime"].(int64),
-				CreatedAt:     doc.Data()["createdAt"].(int64),
-				DetectedAt:    doc.Data()["detectedAt"].(int64),
-			}
-			result = append(result, data)
-		}
-		return result, nil
+	if len(filter.Labels) != 0 {
+		q = q.Where("label", "in", filter.Labels)
 	}
 
 	res := q.Limit(filter.PerPage).Documents(context.Background())

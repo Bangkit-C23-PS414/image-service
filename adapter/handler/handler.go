@@ -77,10 +77,10 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusAccepted)
 	httpWriteResponse(w, &domain.ServerResponse{
 		Message: "Success",
 	})
-	w.WriteHeader(http.StatusAccepted)
 }
 
 func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Request) {
