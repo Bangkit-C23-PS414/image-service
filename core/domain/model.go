@@ -1,14 +1,12 @@
 package domain
 
-import "time"
-
 type Image struct {
-	Email         string    `firestore:"email,omitempty" json:"email,omitempty"`
-	Filename      string    `firestore:"filename,omitempty" json:"filename,omitempty"`
-	Label         string    `firestore:"label" json:"label"`
-	InferenceTime int64     `firestore:"inferenceTime" json:"inferenceTime"`
-	UploadedAt    time.Time `firestore:"uploadedAt" json:"uploadedAt"`
-	DetectedAt    time.Time `firestore:"detectedAt" json:"detectedAt"`
+	Email         string `firestore:"email,omitempty" json:"email,omitempty"`
+	Filename      string `firestore:"filename,omitempty" json:"filename,omitempty"`
+	Label         string `firestore:"label" json:"label"`
+	InferenceTime int64  `firestore:"inferenceTime" json:"inferenceTime"`
+	CreatedAt     int64  `firestore:"createdAt" json:"createdAt"`
+	DetectedAt    int64  `firestore:"detectedAt" json:"detectedAt"`
 }
 
 type UpdateImagePayload struct {
@@ -27,6 +25,8 @@ type UserData struct {
 }
 
 type PageFilter struct {
-	Page    int `json:"page"`
-	PerPage int `json:"per_page`
+	Page      int `json:"page"`
+	PerPage   int `json:"perPage"`
+	StartDate int `json:"startDate"`
+	EndDate   int `json:"endDate"`
 }

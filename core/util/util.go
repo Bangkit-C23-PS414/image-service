@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	MinPageSize      = 15
+	MinPageSize      = 20
 	DefaultFirstPage = 1
 )
 
@@ -23,16 +23,17 @@ func ParseQueryParam(param string) string {
 }
 
 func PageFilter(req *http.Request) domain.PageFilter {
-	page, err := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("page")))
-	if err != nil {
-		log.Println(err)
-	}
-	perPage, err := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("per_page")))
-	if err != nil {
-		log.Println(err)
-	}
+	page, _ := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("page")))
+	perPage, _ := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("perPage")))
+	startDate, _ := strconv.Atoi(req.URL.Query().Get("startDate"))
+	endDate, _ := strconv.Atoi(req.URL.Query().Get("endDate"))
 
 	var filterData = domain.PageFilter{}
+
+	filterData.Page = page
+	filterData.PerPage = perPage
+	filterData.StartDate = startDate
+	filterData.EndDate = endDate
 
 	if perPage == 0 {
 		filterData.PerPage = MinPageSize
@@ -41,8 +42,6 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	if page == 0 {
 		filterData.Page = DefaultFirstPage
 	}
-	filterData.Page = page
-	filterData.PerPage = perPage
 
 	return filterData
 }

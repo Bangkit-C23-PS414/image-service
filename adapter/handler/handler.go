@@ -77,6 +77,9 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	httpWriteResponse(w, &domain.ServerResponse{
+		Message: "Success",
+	})
 	w.WriteHeader(http.StatusAccepted)
 }
 

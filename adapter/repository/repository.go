@@ -64,9 +64,9 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) error 
 	}
 
 	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, domain.Image{
-		Email:      email,
-		Filename:   filename.String(),
-		UploadedAt: time.Now(),
+		Email:     email,
+		Filename:  filename.String(),
+		CreatedAt: time.Now().Unix(),
 	})
 
 	if err != nil {
@@ -86,9 +86,42 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	}
 
 	result := []domain.Image{}
-	q := i.firestoreClient.Collection("images").Where("email", "==", email).Documents(context.Background())
+
+	q := i.firestoreClient.Collection("images").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
+	if filter.StartDate != 0 && filter.EndDate != 0 {
+		res := q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate).Limit(filter.PerPage).Documents(context.Background())
+		for {
+			doc, err := res.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", doc.Data()["filename"]), gcsOpt)
+
+			if err != nil {
+				log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
+				return nil, err
+			}
+
+			data := domain.Image{
+				Email:         fmt.Sprint(doc.Data()["email"]),
+				Filename:      objectUrl,
+				Label:         fmt.Sprint(doc.Data()["label"]),
+				InferenceTime: doc.Data()["inferenceTime"].(int64),
+				CreatedAt:     doc.Data()["createdAt"].(int64),
+				DetectedAt:    doc.Data()["detectedAt"].(int64),
+			}
+			result = append(result, data)
+		}
+		return result, nil
+	}
+
+	res := q.Limit(filter.PerPage).Documents(context.Background())
 	for {
-		doc, err := q.Next()
+		doc, err := res.Next()
 		if err == iterator.Done {
 			break
 		}
@@ -108,8 +141,8 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			Filename:      objectUrl,
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
-			UploadedAt:    doc.Data()["uploadedAt"].(time.Time),
-			DetectedAt:    doc.Data()["detectedAt"].(time.Time),
+			CreatedAt:     doc.Data()["createdAt"].(int64),
+			DetectedAt:    doc.Data()["detectedAt"].(int64),
 		}
 		result = append(result, data)
 	}
