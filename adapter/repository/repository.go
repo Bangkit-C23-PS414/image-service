@@ -48,7 +48,7 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(email string, file *multipart.File) error {
+func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*domain.Image, error) {
 	ctx := context.Background()
 	filename := uuid.New()
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
@@ -56,39 +56,45 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) error 
 	_, err := io.Copy(w, *file)
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error writing to gcs bucket with error %v \n", err)
-		return err
+		return nil, err
 	}
 	if err = w.Close(); err != nil {
 		log.Printf("[ImageRepository.UploadImage] error closing file with error %v \n", err)
-		return err
+		return nil, err
 	}
 
-	_, err = i.firestoreClient.Collection("images-test").Doc(filename.String()).Set(ctx, domain.Image{
-		Email:     email,
-		Filename:  filename.String(),
-		CreatedAt: time.Now().UnixMilli(),
-	})
-
-	if err != nil {
-		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
-		return err
-	}
-
-	return nil
-}
-
-func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageFilter) ([]domain.Image, error) {
-	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	gcsOpt := &storage.SignedURLOptions{
 		Scheme:  storage.SigningSchemeV4,
 		Method:  "GET",
 		Expires: time.Now().Add(7 * 24 * time.Hour),
 	}
+	objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", filename.String()), gcsOpt)
+	if err != nil {
+		return nil, err
+	}
 
+	data := domain.Image{
+		Email:     email,
+		Filename:  filename.String(),
+		CreatedAt: time.Now().UnixMilli(),
+		FileURL:   objectUrl,
+	}
+
+	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, data)
+
+	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
+		return nil, err
+	}
+
+	return &data, nil
+}
+
+func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageFilter) ([]domain.Image, error) {
 	result := []domain.Image{}
 
 	ctx := context.Background()
-	q := i.firestoreClient.Collection("images-test").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
+	q := i.firestoreClient.Collection("images").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
 
 	if filter.StartDate != 0 && filter.EndDate != 0 {
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
@@ -121,17 +127,10 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			return nil, err
 		}
 
-		objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", doc.Data()["filename"]), gcsOpt)
-
-		if err != nil {
-			log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
-			return nil, err
-		}
-
 		data := domain.Image{
 			Email:         fmt.Sprint(doc.Data()["email"]),
 			Filename:      fmt.Sprint(doc.Data()["filename"]),
-			FileURL:       objectUrl,
+			FileURL:       fmt.Sprint(doc.Data()["fileURL"]),
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
@@ -144,7 +143,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Update(ctx, []firestore.Update{
+	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "detectedAt",
 			Value: payload.DetectedAt,
@@ -168,29 +167,16 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 
 func (i *ImageRepository) GetSingleDetection(filename string) (*domain.Image, error) {
 	ctx := context.Background()
-	dsnap, err := i.firestoreClient.Collection("images-test").Doc(filename).Get(ctx)
+	dsnap, err := i.firestoreClient.Collection("images").Doc(filename).Get(ctx)
 	if err != nil {
 		log.Printf("[ImageRepository.GetSingleDetection] error when querying to database with error %v \n", err)
-		return nil, err
-	}
-
-	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
-	gcsOpt := &storage.SignedURLOptions{
-		Scheme:  storage.SigningSchemeV4,
-		Method:  "GET",
-		Expires: time.Now().Add(7 * 24 * time.Hour),
-	}
-
-	objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", filename), gcsOpt)
-	if err != nil {
-		log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL %v \n", err)
 		return nil, err
 	}
 
 	resp := domain.Image{
 		Email:         fmt.Sprint(dsnap.Data()["email"]),
 		Filename:      fmt.Sprint(dsnap.Data()["filename"]),
-		FileURL:       objectUrl,
+		FileURL:       fmt.Sprint(dsnap.Data()["fileURL"]),
 		Label:         fmt.Sprint(dsnap.Data()["label"]),
 		InferenceTime: dsnap.Data()["inferenceTime"].(int64),
 		CreatedAt:     dsnap.Data()["createdAt"].(int64),

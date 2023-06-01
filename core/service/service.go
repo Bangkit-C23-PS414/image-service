@@ -17,13 +17,13 @@ func NewImageService(repo port.ImageRepository) *ImageService {
 	}
 }
 
-func (i *ImageService) UploadImage(email string, image *multipart.File) error {
-	err := i.repo.UploadImage(email, image)
+func (i *ImageService) UploadImage(email string, image *multipart.File) (*domain.Image, error) {
+	res, err := i.repo.UploadImage(email, image)
 	if err != nil {
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
-		return err
+		return nil, err
 	}
-	return nil
+	return res, nil
 }
 
 func (i *ImageService) GetDetectionResults(email string, filter *domain.PageFilter) ([]domain.Image, error) {

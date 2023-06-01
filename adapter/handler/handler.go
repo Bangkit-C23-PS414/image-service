@@ -95,7 +95,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = i.imageService.UploadImage(email, &file)
+	res, err := i.imageService.UploadImage(email, &file)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] error when uploading image with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
@@ -106,6 +106,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	httpWriteResponse(w, &domain.ServerResponse{
 		Message: "Success",
+		Data:    res,
 	}, http.StatusAccepted)
 }
 
