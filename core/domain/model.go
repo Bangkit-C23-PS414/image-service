@@ -7,12 +7,14 @@ type Image struct {
 	InferenceTime int64  `firestore:"inferenceTime" json:"inferenceTime"`
 	CreatedAt     int64  `firestore:"createdAt" json:"createdAt"`
 	DetectedAt    int64  `firestore:"detectedAt" json:"detectedAt"`
+	FileURL       string `firestore:"fileURL" json:"fileURL"`
 }
 
 type UpdateImagePayload struct {
 	Filename      string `firestore:"filename,omitempty"`
 	Label         string `firestore:"label"`
 	InferenceTime int64  `firestore:"inferenceTime"`
+	DetectedAt    int64  `firestore:"detectedAt"`
 }
 
 type ServerResponse struct {
@@ -30,4 +32,5 @@ type PageFilter struct {
 	StartDate int      `json:"startDate"`
 	EndDate   int      `json:"endDate"`
 	Labels    []string `json:"labels"`
+	After     string   `json:"after"`
 }

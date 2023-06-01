@@ -43,3 +43,12 @@ func (i *ImageService) UpdateImageResult(payload domain.UpdateImagePayload) erro
 	}
 	return nil
 }
+
+func (i *ImageService) GetSingleDetection(filename string) (*domain.Image, error) {
+	res, err := i.repo.GetSingleDetection(filename)
+	if err != nil {
+		log.Printf("[ImageService.UpdateImageResult] error when retrieve data from database with error %v \n", err)
+		return nil, err
+	}
+	return res, nil
+}

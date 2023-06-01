@@ -21,8 +21,39 @@ type ImageHttpHandler struct {
 	imageService service.ImageService
 }
 
-func httpWriteResponse(w http.ResponseWriter, response interface{}) {
+func checkToken(w http.ResponseWriter, r *http.Request) (jwt.MapClaims, error) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.Contains(authHeader, "Bearer") {
+		return nil, fmt.Errorf("invalid signing method")
+	}
+
+	tokenString := strings.Replace(authHeader, "Bearer ", "", -1)
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if method, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("invalid signing method")
+		} else if method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("invalid signing method")
+		}
+		return JWT_SIGNATURE_KEY, nil
+	})
+
+	if err != nil {
+		log.Printf("[Server.tokenHandler] unable to parse token with error %v \n", err)
+		return nil, fmt.Errorf(err.Error())
+	}
+
+	claim, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		log.Printf("[Server.tokenHandler] token is invalid %v \n", err)
+		return nil, fmt.Errorf(err.Error())
+	}
+
+	return claim, nil
+}
+
+func httpWriteResponse(w http.ResponseWriter, response interface{}, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(response)
 }
 
@@ -42,10 +73,9 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	file, h, err := r.FormFile("image")
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] fail to read from file with error %v \n", err)
-		w.WriteHeader(http.StatusInternalServerError)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "error read image",
-		})
+		}, http.StatusInternalServerError)
 		return
 	}
 	defer file.Close()
@@ -53,8 +83,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if fileContentType != "image/jpg" && fileContentType != "image/jpeg" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "Content-Type must be image/jmg or image/jpeg",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -62,8 +91,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	if email == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "email should be filled",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -72,15 +100,13 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ImageHttpHandler.UploadImage] error when uploading image with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "Error upload image to database",
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		}, http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusAccepted)
 	httpWriteResponse(w, &domain.ServerResponse{
 		Message: "Success",
-	})
+	}, http.StatusAccepted)
 }
 
 func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Request) {
@@ -88,32 +114,13 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	authHeader := r.Header.Get("Authorization")
-	if !strings.Contains(authHeader, "Bearer") {
-		http.Error(w, "Invalid token", http.StatusBadRequest)
-		return
-	}
 
-	tokenString := strings.Replace(authHeader, "Bearer ", "", -1)
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		if method, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("invalid signing method")
-		} else if method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("invalid signing method")
-		}
-		return JWT_SIGNATURE_KEY, nil
-	})
-
+	claim, err := checkToken(w, r)
 	if err != nil {
-		log.Printf("[Server.tokenHandler] unable to parse token with error %v \n", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	claim, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		log.Printf("[Server.tokenHandler] token is invalid %v \n", err)
-		w.WriteHeader(http.StatusUnauthorized)
+		log.Printf("[ImageHttpHandler.GetDetectionResults] error when checking token with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: err.Error(),
+		}, http.StatusUnauthorized)
 		return
 	}
 
@@ -124,14 +131,13 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 		log.Printf("[ImageHttpHandler.GetDetectionResults] error when retrieve detection results with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "Error read image from database",
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		}, http.StatusInternalServerError)
 		return
 	}
 	httpWriteResponse(w, domain.ServerResponse{
 		Message: "Success",
 		Data:    res,
-	})
+	}, http.StatusOK)
 }
 
 func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Request) {
@@ -143,8 +149,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 	if filename == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "filename should be filled",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -152,8 +157,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 	if label == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "label should be filled",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -161,8 +165,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 	if inferenceTime == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "inferenceTime should be filled",
-		})
-		w.WriteHeader(http.StatusBadRequest)
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -171,8 +174,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "Error parsing inference time",
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		}, http.StatusInternalServerError)
 		return
 	}
 	payload := domain.UpdateImagePayload{
@@ -185,13 +187,46 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		log.Printf("[ImageHttpHandler.UpdateImageResult] error when update detection with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "Error update result to database",
-		})
-		w.WriteHeader(http.StatusInternalServerError)
+		}, http.StatusInternalServerError)
 		return
 	}
 	httpWriteResponse(w, domain.ServerResponse{
 		Message: "Success",
-	})
+	}, http.StatusOK)
+}
+
+func (i *ImageHttpHandler) GetSingleDetection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpWriteResponse(w, domain.ServerResponse{
+			Message: "invalid method",
+		}, http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, err := checkToken(w, r)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.GetSingleDetection] error when checking token with error %v \n", err.Error())
+		httpWriteResponse(w, domain.ServerResponse{
+			Message: "error checking token",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	path := strings.Split(r.URL.Path, "/image-detections/fetch/")
+
+	res, err := i.imageService.GetSingleDetection(path[1])
+	if err != nil {
+		log.Printf("[ImageHttpHandler.GetSingleDetection] error when retireve data from database with error %v \n", err.Error())
+		httpWriteResponse(w, domain.ServerResponse{
+			Message: "error retrieve data from database",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	httpWriteResponse(w, domain.ServerResponse{
+		Message: "success",
+		Data:    res,
+	}, http.StatusOK)
 }
 
 func InitHttpServer(imageService service.ImageService) {
@@ -200,6 +235,7 @@ func InitHttpServer(imageService service.ImageService) {
 	mux.HandleFunc("/image-detections/create", imageHandler.UploadImage)
 	mux.HandleFunc("/image-detections/fetch", imageHandler.GetDetectionResults)
 	mux.HandleFunc("/image-detections/update", imageHandler.UpdateImageResult)
+	mux.HandleFunc("/image-detections/fetch/", imageHandler.GetSingleDetection)
 	server := http.Server{
 		Addr:    ":8080",
 		Handler: mux,

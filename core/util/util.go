@@ -14,6 +14,10 @@ const (
 	DefaultFirstPage = 1
 )
 
+func ToInt64Ptr(i int64) *int64 {
+	return &i
+}
+
 func ParseQueryParam(param string) string {
 	reg, err := regexp.Compile(`[!?;{}<>%'=]`)
 	if err != nil {
@@ -29,6 +33,7 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	startDate, _ := strconv.Atoi(req.URL.Query().Get("startDate"))
 	endDate, _ := strconv.Atoi(req.URL.Query().Get("endDate"))
 	labels := strings.Split(req.URL.Query().Get("labels"), ",")
+	after := req.URL.Query().Get("after")
 
 	var filterData = domain.PageFilter{}
 
@@ -37,6 +42,7 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	filterData.StartDate = startDate
 	filterData.EndDate = endDate
 	filterData.Labels = labels
+	filterData.After = after
 
 	if perPage == 0 {
 		filterData.PerPage = MinPageSize
