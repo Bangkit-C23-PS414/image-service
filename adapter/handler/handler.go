@@ -169,8 +169,24 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		}, http.StatusBadRequest)
 		return
 	}
+	detectedAt := r.FormValue("detectedAt")
+	if detectedAt == "" {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "detectedAt should be filled",
+		}, http.StatusBadRequest)
+		return
+	}
 
 	intInferenceTime, err := strconv.ParseInt(inferenceTime, 10, 64)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error parsing inference time",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	intDetectedAt, err := strconv.ParseInt(detectedAt, 10, 64)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
@@ -182,6 +198,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		Filename:      filename,
 		Label:         label,
 		InferenceTime: intInferenceTime,
+		DetectedAt:    intDetectedAt,
 	}
 	err = i.imageService.UpdateImageResult(payload)
 	if err != nil {

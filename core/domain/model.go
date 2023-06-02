@@ -12,10 +12,11 @@ type Image struct {
 }
 
 type UpdateImagePayload struct {
-	Filename      string `firestore:"filename,omitempty"`
+	Filename      string
 	Label         string `firestore:"label"`
 	InferenceTime int64  `firestore:"inferenceTime"`
 	DetectedAt    int64  `firestore:"detectedAt"`
+	IsDetected    bool   `firestore:"isDetected"`
 }
 
 type ServerResponse struct {

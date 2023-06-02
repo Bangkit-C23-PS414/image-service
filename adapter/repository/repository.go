@@ -108,7 +108,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	if filter.After != "" {
 		dsnap, err := i.firestoreClient.Collection("images-test").Doc(filter.After).Get(ctx)
 		if err != nil {
-			log.Println("[ImageRepository.]")
+			log.Printf("[ImageRepository.GetSingleDetection] error when retrieve dsnap with error %v \n", err)
 			return nil, err
 		}
 
@@ -134,7 +134,6 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
 		}
-		log.Println(doc)
 		result = append(result, data)
 	}
 	return result, nil
@@ -142,15 +141,21 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-	data := domain.Image{
-		DetectedAt:    payload.DetectedAt,
-		InferenceTime: payload.InferenceTime,
-		Label:         payload.Label,
-		IsDetected:    true,
-	}
 
-	// TODO: fix this query
-	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Set(ctx, data)
+	// TODO: this query works when updating inferenceTime and detectedAt
+	// and still success when update label and isDetected.
+	// However, upon successful updating label and isDetected,
+	// when querying the document, the result does not exists
+	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Update(ctx, []firestore.Update{
+		{
+			Path:  "inferenceTime",
+			Value: payload.InferenceTime,
+		},
+		{
+			Path:  "detectedAt",
+			Value: payload.DetectedAt,
+		},
+	})
 
 	if err != nil {
 		log.Printf("[ImageRepository.UpdateImageResult] error when update image result with error %v", err)
