@@ -74,13 +74,14 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*doma
 	}
 
 	data := domain.Image{
-		Email:     email,
-		Filename:  filename.String(),
-		CreatedAt: time.Now().UnixMilli(),
-		FileURL:   objectUrl,
+		Email:      email,
+		Filename:   filename.String(),
+		CreatedAt:  time.Now().UnixMilli(),
+		FileURL:    objectUrl,
+		IsDetected: false,
 	}
 
-	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Set(ctx, data)
+	_, err = i.firestoreClient.Collection("images-test").Doc(filename.String()).Create(ctx, data)
 
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
@@ -94,7 +95,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	result := []domain.Image{}
 
 	ctx := context.Background()
-	q := i.firestoreClient.Collection("images").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
+	q := i.firestoreClient.Collection("images-test").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
 
 	if filter.StartDate != 0 && filter.EndDate != 0 {
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
@@ -104,18 +105,15 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 		q = q.Where("label", "in", filter.Labels)
 	}
 
-	// TODO: fix query below
-	// if filter.After != "" {
-	// 	firstPages, err := q.Documents(ctx).GetAll()
-	// 	if err != nil {
-	// 		log.Printf("[ImageRepository.GetDetectionResults] error generate signed URL with error %v \n", err)
-	// 		return nil, err
-	// 	}
+	if filter.After != "" {
+		dsnap, err := i.firestoreClient.Collection("images-test").Doc(filter.After).Get(ctx)
+		if err != nil {
+			log.Println("[ImageRepository.]")
+			return nil, err
+		}
 
-	// 	lastDoc := firstPages[len(firstPages)-1]
-
-	// 	q = q.OrderBy("createdAt", firestore.Desc).StartAt(lastDoc.Data()["createdAt"])
-	// }
+		q = q.StartAfter(dsnap.Data()["createdAt"])
+	}
 
 	res := q.Limit(filter.PerPage).Documents(ctx)
 	for {
@@ -136,6 +134,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
 		}
+		log.Println(doc)
 		result = append(result, data)
 	}
 	return result, nil
@@ -143,20 +142,15 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
-		{
-			Path:  "detectedAt",
-			Value: payload.DetectedAt,
-		},
-		{
-			Path:  "inferenceTime",
-			Value: payload.InferenceTime,
-		},
-		{
-			Path:  "label",
-			Value: payload.Label,
-		},
-	})
+	data := domain.Image{
+		DetectedAt:    payload.DetectedAt,
+		InferenceTime: payload.InferenceTime,
+		Label:         payload.Label,
+		IsDetected:    true,
+	}
+
+	// TODO: fix this query
+	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Set(ctx, data)
 
 	if err != nil {
 		log.Printf("[ImageRepository.UpdateImageResult] error when update image result with error %v", err)
@@ -167,7 +161,7 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 
 func (i *ImageRepository) GetSingleDetection(filename string) (*domain.Image, error) {
 	ctx := context.Background()
-	dsnap, err := i.firestoreClient.Collection("images").Doc(filename).Get(ctx)
+	dsnap, err := i.firestoreClient.Collection("images-test").Doc(filename).Get(ctx)
 	if err != nil {
 		log.Printf("[ImageRepository.GetSingleDetection] error when querying to database with error %v \n", err)
 		return nil, err

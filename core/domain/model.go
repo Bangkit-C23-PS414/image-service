@@ -8,6 +8,7 @@ type Image struct {
 	CreatedAt     int64  `firestore:"createdAt" json:"createdAt"`
 	DetectedAt    int64  `firestore:"detectedAt" json:"detectedAt"`
 	FileURL       string `firestore:"fileURL" json:"fileURL"`
+	IsDetected    bool   `firestore:"isDetected" json:"isDetected"`
 }
 
 type UpdateImagePayload struct {
