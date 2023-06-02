@@ -74,11 +74,10 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*doma
 	}
 
 	data := domain.Image{
-		Email:      email,
-		Filename:   filename.String(),
-		CreatedAt:  time.Now().UnixMilli(),
-		FileURL:    objectUrl,
-		IsDetected: false,
+		Email:     email,
+		Filename:  filename.String(),
+		CreatedAt: time.Now().UnixMilli(),
+		FileURL:   objectUrl,
 	}
 
 	_, err = i.firestoreClient.Collection("images-test").Doc(filename.String()).Create(ctx, data)
@@ -129,10 +128,10 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			Email:         fmt.Sprint(doc.Data()["email"]),
 			Filename:      fmt.Sprint(doc.Data()["filename"]),
 			FileURL:       fmt.Sprint(doc.Data()["fileURL"]),
-			Label:         fmt.Sprint(doc.Data()["label"]),
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
+			IsDetected:    doc.Data()["isDetected"].(bool),
 		}
 		result = append(result, data)
 	}
@@ -142,10 +141,13 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
 
-	// TODO: this query works when updating inferenceTime and detectedAt
-	// and still success when update label and isDetected.
-	// However, upon successful updating label and isDetected,
+	// TODO: this query works when updating inferenceTime, detectedAt
+	// and isDetected and still success when update label and .
+	// However, upon successful updating label,
 	// when querying the document, the result does not exists
+
+	// TODO: figure out about indexing on label field
+	// so later when read document, the query will give result
 	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "inferenceTime",
@@ -154,6 +156,10 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 		{
 			Path:  "detectedAt",
 			Value: payload.DetectedAt,
+		},
+		{
+			Path:  "isDetected",
+			Value: true,
 		},
 	})
 
@@ -176,7 +182,6 @@ func (i *ImageRepository) GetSingleDetection(filename string) (*domain.Image, er
 		Email:         fmt.Sprint(dsnap.Data()["email"]),
 		Filename:      fmt.Sprint(dsnap.Data()["filename"]),
 		FileURL:       fmt.Sprint(dsnap.Data()["fileURL"]),
-		Label:         fmt.Sprint(dsnap.Data()["label"]),
 		InferenceTime: dsnap.Data()["inferenceTime"].(int64),
 		CreatedAt:     dsnap.Data()["createdAt"].(int64),
 		DetectedAt:    dsnap.Data()["detectedAt"].(int64),

@@ -196,7 +196,7 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 	}
 	payload := domain.UpdateImagePayload{
 		Filename:      filename,
-		Label:         label,
+		Label:         fmt.Sprint(label),
 		InferenceTime: intInferenceTime,
 		DetectedAt:    intDetectedAt,
 	}
