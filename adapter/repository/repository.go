@@ -100,7 +100,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
 	}
 
-	if len(filter.Labels) != 0 {
+	if len(filter.Labels) != 1 {
 		q = q.Where("label", "in", filter.Labels)
 	}
 
@@ -132,6 +132,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
 			IsDetected:    doc.Data()["isDetected"].(bool),
+			Label:         fmt.Sprint(doc.Data()["label"]),
 		}
 		result = append(result, data)
 	}
@@ -160,6 +161,10 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 		{
 			Path:  "isDetected",
 			Value: true,
+		},
+		{
+			Path:  "label",
+			Value: payload.Label,
 		},
 	})
 
