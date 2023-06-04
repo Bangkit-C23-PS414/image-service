@@ -32,9 +32,13 @@ func PageFilter(req *http.Request) domain.PageFilter {
 	perPage, _ := strconv.Atoi(ParseQueryParam(req.URL.Query().Get("perPage")))
 	startDate, _ := strconv.Atoi(req.URL.Query().Get("startDate"))
 	endDate, _ := strconv.Atoi(req.URL.Query().Get("endDate"))
-	labels := strings.Split(req.URL.Query().Get("labels"), ",")
 	after := req.URL.Query().Get("after")
 
+	labels := make([]string, 0)
+	rawLabels := req.URL.Query().Get("labels")
+	if rawLabels != "" {
+		labels = strings.Split(rawLabels, ",")
+	}
 	var filterData = domain.PageFilter{}
 
 	filterData.Page = page

@@ -22,6 +22,21 @@ type ImageRepository struct {
 	gcsClient       storage.Client
 }
 
+func generateSignedURL(i *ImageRepository) (string, error) {
+	filename := uuid.New()
+	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
+	gcsOpt := &storage.SignedURLOptions{
+		Scheme:  storage.SigningSchemeV4,
+		Method:  "GET",
+		Expires: time.Now().Add(7 * 24 * time.Hour),
+	}
+	objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", filename), gcsOpt)
+	if err != nil {
+		return "", err
+	}
+	return objectUrl, nil
+}
+
 func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	projectId := os.Getenv("CAPSTONE_PROJECT_ID")
 	if projectId == "" {
@@ -63,13 +78,9 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*doma
 		return nil, err
 	}
 
-	gcsOpt := &storage.SignedURLOptions{
-		Scheme:  storage.SigningSchemeV4,
-		Method:  "GET",
-		Expires: time.Now().Add(7 * 24 * time.Hour),
-	}
-	objectUrl, err := i.gcsClient.Bucket(bktName).SignedURL(fmt.Sprintf("images/%v", filename.String()), gcsOpt)
+	objectUrl, err := generateSignedURL(i)
 	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error when generate objectURl with error %v \n", err)
 		return nil, err
 	}
 
@@ -100,7 +111,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
 	}
 
-	if len(filter.Labels) != 1 {
+	if len(filter.Labels) > 0 {
 		q = q.Where("label", "in", filter.Labels)
 	}
 
@@ -124,13 +135,20 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			return nil, err
 		}
 
+		objectURL, err := generateSignedURL(i)
+		if err != nil {
+			log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+			return nil, err
+		}
+
 		data := domain.Image{
 			Email:         fmt.Sprint(doc.Data()["email"]),
 			Filename:      fmt.Sprint(doc.Data()["filename"]),
-			FileURL:       fmt.Sprint(doc.Data()["fileURL"]),
+			FileURL:       objectURL,
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
+			Confidence:    doc.Data()["confidence"].(int64),
 			IsDetected:    doc.Data()["isDetected"].(bool),
 			Label:         fmt.Sprint(doc.Data()["label"]),
 		}
@@ -141,14 +159,6 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-
-	// TODO: this query works when updating inferenceTime, detectedAt
-	// and isDetected and still success when update label and .
-	// However, upon successful updating label,
-	// when querying the document, the result does not exists
-
-	// TODO: figure out about indexing on label field
-	// so later when read document, the query will give result
 	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "inferenceTime",
@@ -165,6 +175,10 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 		{
 			Path:  "label",
 			Value: payload.Label,
+		},
+		{
+			Path:  "confidence",
+			Value: payload.Confidence,
 		},
 	})
 
@@ -183,13 +197,22 @@ func (i *ImageRepository) GetSingleDetection(filename string) (*domain.Image, er
 		return nil, err
 	}
 
+	objectURL, err := generateSignedURL(i)
+	if err != nil {
+		log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+		return nil, err
+	}
+
 	resp := domain.Image{
 		Email:         fmt.Sprint(dsnap.Data()["email"]),
 		Filename:      fmt.Sprint(dsnap.Data()["filename"]),
-		FileURL:       fmt.Sprint(dsnap.Data()["fileURL"]),
+		FileURL:       objectURL,
 		InferenceTime: dsnap.Data()["inferenceTime"].(int64),
 		CreatedAt:     dsnap.Data()["createdAt"].(int64),
 		DetectedAt:    dsnap.Data()["detectedAt"].(int64),
+		Confidence:    dsnap.Data()["confidence"].(int64),
+		IsDetected:    dsnap.Data()["isDetected"].(bool),
+		Label:         fmt.Sprint(dsnap.Data()["label"]),
 	}
 
 	return &resp, nil

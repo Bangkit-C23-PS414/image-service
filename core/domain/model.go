@@ -7,6 +7,7 @@ type Image struct {
 	InferenceTime int64  `firestore:"inferenceTime" json:"inferenceTime"`
 	CreatedAt     int64  `firestore:"createdAt" json:"createdAt"`
 	DetectedAt    int64  `firestore:"detectedAt" json:"detectedAt"`
+	Confidence    int64  `firestore:"confidence" json:"confidence"`
 	FileURL       string `firestore:"fileURL" json:"fileURL"`
 	IsDetected    bool   `firestore:"isDetected" json:"isDetected"`
 }
@@ -16,6 +17,7 @@ type UpdateImagePayload struct {
 	Label         string `firestore:"label"`
 	InferenceTime int64  `firestore:"inferenceTime"`
 	DetectedAt    int64  `firestore:"detectedAt"`
+	Confidence    int64  `firestore:"confidence"`
 	IsDetected    bool   `firestore:"isDetected"`
 }
 

@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -104,6 +103,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[ImageHttpHandler.UploadImage] [/image-detections/create] success upload image to database from payload: %v \n", res)
 	httpWriteResponse(w, &domain.ServerResponse{
 		Message: "Success",
 		Data:    res,
@@ -135,6 +135,8 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 		}, http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[ImageHttpHandler.GetDetectionResults] [/image-detections/fetch] success retrieve documents with values: %v \n", res)
 	httpWriteResponse(w, domain.ServerResponse{
 		Message: "Success",
 		Data:    res,
@@ -146,60 +148,45 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	filename := r.FormValue("filename")
-	if filename == "" {
+
+	var payload domain.UpdateImagePayload
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] decode payload with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error decode payload",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	if payload.Filename == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "filename should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	label := r.FormValue("label")
-	if label == "" {
+	if payload.Label == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "label should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	inferenceTime := r.FormValue("inferenceTime")
-	if inferenceTime == "" {
+	if payload.InferenceTime == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "inferenceTime should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
-	detectedAt := r.FormValue("detectedAt")
-	if detectedAt == "" {
+
+	if payload.DetectedAt == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "detectedAt should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	intInferenceTime, err := strconv.ParseInt(inferenceTime, 10, 64)
-	if err != nil {
-		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
-		httpWriteResponse(w, &domain.ServerResponse{
-			Message: "Error parsing inference time",
-		}, http.StatusInternalServerError)
-		return
-	}
-
-	intDetectedAt, err := strconv.ParseInt(detectedAt, 10, 64)
-	if err != nil {
-		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsing inference time to int64 with error %v \n", err)
-		httpWriteResponse(w, &domain.ServerResponse{
-			Message: "Error parsing inference time",
-		}, http.StatusInternalServerError)
-		return
-	}
-	payload := domain.UpdateImagePayload{
-		Filename:      filename,
-		Label:         fmt.Sprint(label),
-		InferenceTime: intInferenceTime,
-		DetectedAt:    intDetectedAt,
-	}
 	err = i.imageService.UpdateImageResult(payload)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UpdateImageResult] error when update detection with error %v \n", err)
@@ -208,6 +195,8 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		}, http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[ImageHttpHandler.UpdateImageResult] [/image-detections/update] success upload detection data from payload: %v \n", payload)
 	httpWriteResponse(w, domain.ServerResponse{
 		Message: "Success",
 	}, http.StatusOK)
@@ -241,6 +230,7 @@ func (i *ImageHttpHandler) GetSingleDetection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	log.Printf("[ImageHttpHandler.GetSingleDetection] [/image-detections/fetch/] success retrieve single document with response: %v \n", res)
 	httpWriteResponse(w, domain.ServerResponse{
 		Message: "success",
 		Data:    res,
@@ -258,6 +248,7 @@ func InitHttpServer(imageService service.ImageService) {
 		Addr:    ":8080",
 		Handler: mux,
 	}
+	log.Println("serving at port 8080")
 	err := server.ListenAndServe()
 	if err != nil {
 		log.Printf("error listening to port 8080 with error %v \n", err)
