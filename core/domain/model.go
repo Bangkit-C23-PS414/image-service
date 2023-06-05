@@ -9,6 +9,7 @@ type Image struct {
 	DetectedAt    int64  `firestore:"detectedAt" json:"detectedAt"`
 	Confidence    int64  `firestore:"confidence" json:"confidence"`
 	FileURL       string `firestore:"fileURL" json:"fileURL"`
+	BlurHash      string `firestore:"blurHash" json:"blurHash"`
 	IsDetected    bool   `firestore:"isDetected" json:"isDetected"`
 }
 
@@ -22,8 +23,8 @@ type UpdateImagePayload struct {
 }
 
 type ServerResponse struct {
-	Message string `json:"Message,omitempty"`
-	Data    interface{}
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data"`
 }
 
 type UserData struct {

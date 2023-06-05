@@ -3,7 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"image"
 	"image-service/core/domain"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"log"
 	"mime/multipart"
@@ -12,6 +15,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
+	"github.com/bbrks/go-blurhash"
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -63,18 +67,34 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*domain.Image, error) {
+func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domain.Image, error) {
 	ctx := context.Background()
 	filename := uuid.New()
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	w := i.gcsClient.Bucket(bktName).Object("images/" + filename.String()).NewWriter(ctx)
-	_, err := io.Copy(w, *file)
+	_, err := io.Copy(w, file)
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error writing to gcs bucket with error %v \n", err)
 		return nil, err
 	}
 	if err = w.Close(); err != nil {
 		log.Printf("[ImageRepository.UploadImage] error closing file with error %v \n", err)
+		return nil, err
+	}
+
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error seeking with error %v \n", err)
+		return nil, err
+	}
+	img, _, err := image.Decode(file)
+	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error decode image with error %v \n", err)
+		return nil, err
+	}
+	hash, err := blurhash.Encode(3, 3, img)
+	if err != nil {
+		log.Printf("[ImageRepository.UploadImage] error when performing blur hash with error %v \n", err)
 		return nil, err
 	}
 
@@ -89,9 +109,10 @@ func (i *ImageRepository) UploadImage(email string, file *multipart.File) (*doma
 		Filename:  filename.String(),
 		CreatedAt: time.Now().UnixMilli(),
 		FileURL:   objectUrl,
+		BlurHash:  hash,
 	}
 
-	_, err = i.firestoreClient.Collection("images-test").Doc(filename.String()).Create(ctx, data)
+	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, data)
 
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error write to firestore with error %v \n", err)
@@ -105,24 +126,56 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	result := []domain.Image{}
 
 	ctx := context.Background()
-	q := i.firestoreClient.Collection("images-test").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
+	q := i.firestoreClient.Collection("images").Where("email", "==", email).OrderBy("createdAt", firestore.Desc)
 
 	if filter.StartDate != 0 && filter.EndDate != 0 {
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
+		log.Println("execute date filter")
 	}
 
 	if len(filter.Labels) > 0 {
+		notDetectedRes := q.Where("isDetected", "==", false).Documents(ctx)
+		for {
+			doc, err := notDetectedRes.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			objectURL, err := generateSignedURL(i)
+			if err != nil {
+				log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+				return nil, err
+			}
+			data := domain.Image{
+				Email:         fmt.Sprint(doc.Data()["email"]),
+				Filename:      fmt.Sprint(doc.Data()["filename"]),
+				FileURL:       objectURL,
+				InferenceTime: doc.Data()["inferenceTime"].(int64),
+				CreatedAt:     doc.Data()["createdAt"].(int64),
+				DetectedAt:    doc.Data()["detectedAt"].(int64),
+				Confidence:    doc.Data()["confidence"].(int64),
+				IsDetected:    doc.Data()["isDetected"].(bool),
+				Label:         fmt.Sprint(doc.Data()["label"]),
+				BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
+			}
+			result = append(result, data)
+		}
+
 		q = q.Where("label", "in", filter.Labels)
+		log.Println("execute label filter")
 	}
 
 	if filter.After != "" {
-		dsnap, err := i.firestoreClient.Collection("images-test").Doc(filter.After).Get(ctx)
+		dsnap, err := i.firestoreClient.Collection("images").Doc(filter.After).Get(ctx)
 		if err != nil {
 			log.Printf("[ImageRepository.GetSingleDetection] error when retrieve dsnap with error %v \n", err)
 			return nil, err
 		}
 
 		q = q.StartAfter(dsnap.Data()["createdAt"])
+		log.Println("execute after filter")
 	}
 
 	res := q.Limit(filter.PerPage).Documents(ctx)
@@ -151,6 +204,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			Confidence:    doc.Data()["confidence"].(int64),
 			IsDetected:    doc.Data()["isDetected"].(bool),
 			Label:         fmt.Sprint(doc.Data()["label"]),
+			BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
 		}
 		result = append(result, data)
 	}
@@ -159,7 +213,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-	_, err := i.firestoreClient.Collection("images-test").Doc(payload.Filename).Update(ctx, []firestore.Update{
+	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "inferenceTime",
 			Value: payload.InferenceTime,
@@ -189,31 +243,61 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 	return nil
 }
 
-func (i *ImageRepository) GetSingleDetection(filename string) (*domain.Image, error) {
+func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Image, error) {
 	ctx := context.Background()
-	dsnap, err := i.firestoreClient.Collection("images-test").Doc(filename).Get(ctx)
-	if err != nil {
-		log.Printf("[ImageRepository.GetSingleDetection] error when querying to database with error %v \n", err)
-		return nil, err
+	docs := i.firestoreClient.Collection("images").Where("email", "==", email).Where("filename", "==", filename).Documents(ctx)
+	// dsnap, err := i.firestoreClient.Collection("images").Doc(filename).Get(ctx)
+	// if err != nil {
+	// 	log.Printf("[ImageRepository.GetSingleDetection] error when querying to database with error %v \n", err)
+	// 	return nil, err
+	// }
+	var resp domain.Image
+	for {
+		doc, err := docs.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		objectURL, err := generateSignedURL(i)
+		if err != nil {
+			log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+			return nil, err
+		}
+
+		resp = domain.Image{
+			Email:         fmt.Sprint(doc.Data()["email"]),
+			Filename:      fmt.Sprint(doc.Data()["filename"]),
+			FileURL:       objectURL,
+			InferenceTime: doc.Data()["inferenceTime"].(int64),
+			CreatedAt:     doc.Data()["createdAt"].(int64),
+			DetectedAt:    doc.Data()["detectedAt"].(int64),
+			Confidence:    doc.Data()["confidence"].(int64),
+			IsDetected:    doc.Data()["isDetected"].(bool),
+			Label:         fmt.Sprint(doc.Data()["label"]),
+			BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
+		}
 	}
 
-	objectURL, err := generateSignedURL(i)
-	if err != nil {
-		log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
-		return nil, err
-	}
+	// objectURL, err := generateSignedURL(i)
+	// if err != nil {
+	// 	log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+	// 	return nil, err
+	// }
 
-	resp := domain.Image{
-		Email:         fmt.Sprint(dsnap.Data()["email"]),
-		Filename:      fmt.Sprint(dsnap.Data()["filename"]),
-		FileURL:       objectURL,
-		InferenceTime: dsnap.Data()["inferenceTime"].(int64),
-		CreatedAt:     dsnap.Data()["createdAt"].(int64),
-		DetectedAt:    dsnap.Data()["detectedAt"].(int64),
-		Confidence:    dsnap.Data()["confidence"].(int64),
-		IsDetected:    dsnap.Data()["isDetected"].(bool),
-		Label:         fmt.Sprint(dsnap.Data()["label"]),
-	}
+	// resp := domain.Image{
+	// 	Email:         fmt.Sprint(dsnap.Data()["email"]),
+	// 	Filename:      fmt.Sprint(dsnap.Data()["filename"]),
+	// 	FileURL:       objectURL,
+	// 	InferenceTime: dsnap.Data()["inferenceTime"].(int64),
+	// 	CreatedAt:     dsnap.Data()["createdAt"].(int64),
+	// 	DetectedAt:    dsnap.Data()["detectedAt"].(int64),
+	// 	Confidence:    dsnap.Data()["confidence"].(int64),
+	// 	IsDetected:    dsnap.Data()["isDetected"].(bool),
+	// 	Label:         fmt.Sprint(dsnap.Data()["label"]),
+	// 	BlurHash:      fmt.Sprint(dsnap.Data()["blurHash"]),
+	// }
 
 	return &resp, nil
 }

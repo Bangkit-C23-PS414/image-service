@@ -86,7 +86,16 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.FormValue("email")
+	claim, err := checkToken(w, r)
+	if err != nil {
+		log.Printf("unable to retrieve token claim with error %v \n", err)
+		httpWriteResponse(w, domain.ServerResponse{
+			Message: "error retrieve claim",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	email := fmt.Sprint(claim["email"])
 	if email == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "email should be filled",
@@ -94,7 +103,7 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := i.imageService.UploadImage(email, &file)
+	res, err := i.imageService.UploadImage(email, file)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.UploadImage] error when uploading image with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
@@ -210,7 +219,7 @@ func (i *ImageHttpHandler) GetSingleDetection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_, err := checkToken(w, r)
+	claim, err := checkToken(w, r)
 	if err != nil {
 		log.Printf("[ImageHttpHandler.GetSingleDetection] error when checking token with error %v \n", err.Error())
 		httpWriteResponse(w, domain.ServerResponse{
@@ -219,9 +228,11 @@ func (i *ImageHttpHandler) GetSingleDetection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	email := fmt.Sprint(claim["email"])
+
 	path := strings.Split(r.URL.Path, "/image-detections/fetch/")
 
-	res, err := i.imageService.GetSingleDetection(path[1])
+	res, err := i.imageService.GetSingleDetection(email, path[1])
 	if err != nil {
 		log.Printf("[ImageHttpHandler.GetSingleDetection] error when retireve data from database with error %v \n", err.Error())
 		httpWriteResponse(w, domain.ServerResponse{
