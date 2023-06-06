@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
+	"google.golang.org/api/iterator"
 )
 
 var JWT_SIGNATURE_KEY = []byte(os.Getenv("JWT_SIGNATURE_KEY"))
@@ -137,6 +138,13 @@ func (i *ImageHttpHandler) GetDetectionResults(w http.ResponseWriter, r *http.Re
 	filter := util.PageFilter(r)
 	email := fmt.Sprint(claim["email"])
 	res, err := i.imageService.GetDetectionResults(email, &filter)
+	if err == iterator.Done {
+		log.Println("[ImageHttpHanndler.GetSingleDetection]unable to iterate next document, the cursor reached the end of documents")
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "error when read document, the cursor has reach the limit",
+		}, http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		log.Printf("[ImageHttpHandler.GetDetectionResults] error when retrieve detection results with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
@@ -238,6 +246,13 @@ func (i *ImageHttpHandler) GetSingleDetection(w http.ResponseWriter, r *http.Req
 		httpWriteResponse(w, domain.ServerResponse{
 			Message: "error retrieve data from database",
 		}, http.StatusInternalServerError)
+		return
+	}
+
+	if res.Filename == "" {
+		httpWriteResponse(w, domain.ServerResponse{
+			Message: "data not found",
+		}, http.StatusNotFound)
 		return
 	}
 

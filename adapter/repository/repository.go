@@ -26,8 +26,7 @@ type ImageRepository struct {
 	gcsClient       storage.Client
 }
 
-func generateSignedURL(i *ImageRepository) (string, error) {
-	filename := uuid.New()
+func generateSignedURL(i *ImageRepository, filename string) (string, error) {
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
 	gcsOpt := &storage.SignedURLOptions{
 		Scheme:  storage.SigningSchemeV4,
@@ -98,7 +97,7 @@ func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domai
 		return nil, err
 	}
 
-	objectUrl, err := generateSignedURL(i)
+	objectUrl, err := generateSignedURL(i, filename.String())
 	if err != nil {
 		log.Printf("[ImageRepository.UploadImage] error when generate objectURl with error %v \n", err)
 		return nil, err
@@ -130,52 +129,23 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 	if filter.StartDate != 0 && filter.EndDate != 0 {
 		q = q.Where("createdAt", ">=", filter.StartDate).Where("createdAt", "<=", filter.EndDate)
-		log.Println("execute date filter")
 	}
 
 	if len(filter.Labels) > 0 {
-		notDetectedRes := q.Where("isDetected", "==", false).Documents(ctx)
-		for {
-			doc, err := notDetectedRes.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			objectURL, err := generateSignedURL(i)
-			if err != nil {
-				log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
-				return nil, err
-			}
-			data := domain.Image{
-				Email:         fmt.Sprint(doc.Data()["email"]),
-				Filename:      fmt.Sprint(doc.Data()["filename"]),
-				FileURL:       objectURL,
-				InferenceTime: doc.Data()["inferenceTime"].(int64),
-				CreatedAt:     doc.Data()["createdAt"].(int64),
-				DetectedAt:    doc.Data()["detectedAt"].(int64),
-				Confidence:    doc.Data()["confidence"].(int64),
-				IsDetected:    doc.Data()["isDetected"].(bool),
-				Label:         fmt.Sprint(doc.Data()["label"]),
-				BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
-			}
-			result = append(result, data)
-		}
-
-		q = q.Where("label", "in", filter.Labels)
+		filter.Labels = append(filter.Labels, "")
 		log.Println("execute label filter")
+		q = q.Where("label", "in", filter.Labels)
 	}
 
 	if filter.After != "" {
 		dsnap, err := i.firestoreClient.Collection("images").Doc(filter.After).Get(ctx)
 		if err != nil {
-			log.Printf("[ImageRepository.GetSingleDetection] error when retrieve dsnap with error %v \n", err)
+			log.Printf("[ImageRepository.GetDetectionResults] error when retrieve dsnap with error %v \n", err)
 			return nil, err
 		}
+		log.Printf("filename: %v \n", dsnap.Data()["filename"])
 
 		q = q.StartAfter(dsnap.Data()["createdAt"])
-		log.Println("execute after filter")
 	}
 
 	res := q.Limit(filter.PerPage).Documents(ctx)
@@ -188,15 +158,16 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			return nil, err
 		}
 
-		objectURL, err := generateSignedURL(i)
+		filename := fmt.Sprint(doc.Data()["filename"])
+		objectURL, err := generateSignedURL(i, filename)
 		if err != nil {
-			log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
+			log.Printf("[ImageRepository.GetDetectionResults] error when generate objectURL with error %v \n", err)
 			return nil, err
 		}
 
 		data := domain.Image{
 			Email:         fmt.Sprint(doc.Data()["email"]),
-			Filename:      fmt.Sprint(doc.Data()["filename"]),
+			Filename:      filename,
 			FileURL:       objectURL,
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
@@ -246,11 +217,7 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Image, error) {
 	ctx := context.Background()
 	docs := i.firestoreClient.Collection("images").Where("email", "==", email).Where("filename", "==", filename).Documents(ctx)
-	// dsnap, err := i.firestoreClient.Collection("images").Doc(filename).Get(ctx)
-	// if err != nil {
-	// 	log.Printf("[ImageRepository.GetSingleDetection] error when querying to database with error %v \n", err)
-	// 	return nil, err
-	// }
+
 	var resp domain.Image
 	for {
 		doc, err := docs.Next()
@@ -260,7 +227,9 @@ func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Im
 		if err != nil {
 			return nil, err
 		}
-		objectURL, err := generateSignedURL(i)
+
+		filename := fmt.Sprint(doc.Data()["filename"])
+		objectURL, err := generateSignedURL(i, filename)
 		if err != nil {
 			log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
 			return nil, err
@@ -268,7 +237,7 @@ func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Im
 
 		resp = domain.Image{
 			Email:         fmt.Sprint(doc.Data()["email"]),
-			Filename:      fmt.Sprint(doc.Data()["filename"]),
+			Filename:      filename,
 			FileURL:       objectURL,
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
@@ -279,25 +248,6 @@ func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Im
 			BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
 		}
 	}
-
-	// objectURL, err := generateSignedURL(i)
-	// if err != nil {
-	// 	log.Printf("[ImageRepository.GetSingleDetection] error when generate objectURL with error %v \n", err)
-	// 	return nil, err
-	// }
-
-	// resp := domain.Image{
-	// 	Email:         fmt.Sprint(dsnap.Data()["email"]),
-	// 	Filename:      fmt.Sprint(dsnap.Data()["filename"]),
-	// 	FileURL:       objectURL,
-	// 	InferenceTime: dsnap.Data()["inferenceTime"].(int64),
-	// 	CreatedAt:     dsnap.Data()["createdAt"].(int64),
-	// 	DetectedAt:    dsnap.Data()["detectedAt"].(int64),
-	// 	Confidence:    dsnap.Data()["confidence"].(int64),
-	// 	IsDetected:    dsnap.Data()["isDetected"].(bool),
-	// 	Label:         fmt.Sprint(dsnap.Data()["label"]),
-	// 	BlurHash:      fmt.Sprint(dsnap.Data()["blurHash"]),
-	// }
 
 	return &resp, nil
 }
