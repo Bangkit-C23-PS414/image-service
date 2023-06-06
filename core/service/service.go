@@ -1,20 +1,37 @@
 package service
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"image-service/core/domain"
 	"image-service/core/port"
+	"io"
 	"log"
 	"mime/multipart"
+	"net/http"
+	"os"
+
+	"cloud.google.com/go/pubsub"
 )
 
 type ImageService struct {
-	repo port.ImageRepository
+	repo         port.ImageRepository
+	pubsubClient pubsub.Client
 }
 
-func NewImageService(repo port.ImageRepository) *ImageService {
-	return &ImageService{
-		repo: repo,
+func NewImageService(repo port.ImageRepository) (*ImageService, error) {
+	ctx := context.Background()
+	projectId := os.Getenv("ML_SERVICE_PROJECT_ID")
+	pubsubClient, err := pubsub.NewClient(ctx, projectId)
+	if err != nil {
+		log.Printf("failed to initialize pubsub client with error %v \n", err)
+		return nil, err
 	}
+	return &ImageService{
+		repo:         repo,
+		pubsubClient: *pubsubClient,
+	}, nil
 }
 
 func (i *ImageService) UploadImage(email string, image multipart.File) (*domain.Image, error) {
@@ -23,6 +40,48 @@ func (i *ImageService) UploadImage(email string, image multipart.File) (*domain.
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
 		return nil, err
 	}
+	payload := domain.SendToMLPayload{
+		Filename: res.Filename,
+		FileURL:  res.FileURL,
+	}
+	buf := new(bytes.Buffer)
+	err = json.NewEncoder(buf).Encode(&payload)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
+		return nil, err
+	}
+
+	// projectId := os.Getenv("CAPSTONE_PROJECT_ID")
+	// topic := i.pubsubClient.TopicInProject("upload-image", projectId)
+
+	// publishRes := topic.Publish(context.TODO(), &pubsub.Message{
+	// 	Data: buf.Bytes(),
+	// })
+
+	// _, err = publishRes.Get(context.TODO())
+	// if err != nil {
+	// 	log.Printf("[ImageService.UploadImage] error when publish to pub/sub with error %v \n", err)
+	// 	return nil, err
+	// }
+
+	req, err := http.NewRequest(http.MethodPut, "https://c23-ps414-ml-service.et.r.appspot.com/predict", buf)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error creating request with error %v \n", err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error sending request to ML with error %v \n", err)
+		return nil, err
+	}
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error read response body with error %v \n", err)
+		return nil, err
+	}
+
 	return res, nil
 }
 

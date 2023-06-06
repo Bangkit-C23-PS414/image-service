@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -176,33 +177,34 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if payload.Filename == "" {
+	if payload.Data.Filename == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "filename should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.Label == "" {
+	if payload.Data.Label == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "label should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.InferenceTime == 0 {
+	if payload.Data.InferenceTime == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "inferenceTime should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.DetectedAt == 0 {
+	if payload.Data.DetectedAt == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "detectedAt should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
+	fmt.Println(reflect.ValueOf(payload.Data.Confidence).Kind())
 
 	err = i.imageService.UpdateImageResult(payload)
 	if err != nil {

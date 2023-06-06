@@ -172,7 +172,7 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
-			Confidence:    doc.Data()["confidence"].(int64),
+			Confidence:    doc.Data()["confidence"].(float64),
 			IsDetected:    doc.Data()["isDetected"].(bool),
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),
@@ -184,14 +184,14 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
 	ctx := context.Background()
-	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
+	_, err := i.firestoreClient.Collection("images").Doc(payload.Data.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "inferenceTime",
-			Value: payload.InferenceTime,
+			Value: int64(payload.Data.InferenceTime),
 		},
 		{
 			Path:  "detectedAt",
-			Value: payload.DetectedAt,
+			Value: int64(payload.Data.DetectedAt),
 		},
 		{
 			Path:  "isDetected",
@@ -199,11 +199,11 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 		},
 		{
 			Path:  "label",
-			Value: payload.Label,
+			Value: payload.Data.Label,
 		},
 		{
 			Path:  "confidence",
-			Value: payload.Confidence,
+			Value: float64(payload.Data.Confidence),
 		},
 	})
 
@@ -242,7 +242,7 @@ func (i *ImageRepository) GetSingleDetection(email, filename string) (*domain.Im
 			InferenceTime: doc.Data()["inferenceTime"].(int64),
 			CreatedAt:     doc.Data()["createdAt"].(int64),
 			DetectedAt:    doc.Data()["detectedAt"].(int64),
-			Confidence:    doc.Data()["confidence"].(int64),
+			Confidence:    doc.Data()["confidence"].(float64),
 			IsDetected:    doc.Data()["isDetected"].(bool),
 			Label:         fmt.Sprint(doc.Data()["label"]),
 			BlurHash:      fmt.Sprint(doc.Data()["blurHash"]),

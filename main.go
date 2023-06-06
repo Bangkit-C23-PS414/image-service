@@ -17,7 +17,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("error initialize NewImageRepository with error %v", err)
 	}
-	imageService := service.NewImageService(store)
+	imageService, err := service.NewImageService(store)
+	if err != nil {
+		log.Fatalf("error initialize NewImageService with error %v", err)
+	}
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
