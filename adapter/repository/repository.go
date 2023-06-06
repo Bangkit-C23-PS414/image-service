@@ -182,16 +182,16 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 	return result, nil
 }
 
-func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) error {
+func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayloadData) error {
 	ctx := context.Background()
-	_, err := i.firestoreClient.Collection("images").Doc(payload.Data.Filename).Update(ctx, []firestore.Update{
+	_, err := i.firestoreClient.Collection("images").Doc(payload.Filename).Update(ctx, []firestore.Update{
 		{
 			Path:  "inferenceTime",
-			Value: int64(payload.Data.InferenceTime),
+			Value: int64(payload.InferenceTime),
 		},
 		{
 			Path:  "detectedAt",
-			Value: int64(payload.Data.DetectedAt),
+			Value: int64(payload.DetectedAt),
 		},
 		{
 			Path:  "isDetected",
@@ -199,11 +199,11 @@ func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayload) e
 		},
 		{
 			Path:  "label",
-			Value: payload.Data.Label,
+			Value: payload.Label,
 		},
 		{
 			Path:  "confidence",
-			Value: float64(payload.Data.Confidence),
+			Value: float64(payload.Confidence),
 		},
 	})
 

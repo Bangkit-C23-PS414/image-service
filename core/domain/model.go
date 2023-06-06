@@ -19,7 +19,6 @@ type UpdateImagePayloadData struct {
 	InferenceTime float32 `firestore:"inferenceTime" json:"inferenceTime"`
 	DetectedAt    float32 `firestore:"detectedAt" json:"detectedAt"`
 	Confidence    float64 `firestore:"confidence" json:"confidence"`
-	IsDetected    bool    `firestore:"isDetected"`
 }
 type UpdateImagePayload struct {
 	Message string                 `json:"message"`

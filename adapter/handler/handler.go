@@ -6,10 +6,12 @@ import (
 	"image-service/core/domain"
 	"image-service/core/service"
 	"image-service/core/util"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
-	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -167,44 +169,98 @@ func (i *ImageHttpHandler) UpdateImageResult(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var payload domain.UpdateImagePayload
-	err := json.NewDecoder(r.Body).Decode(&payload)
+	var payload domain.UpdateImagePayloadData
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("[ImageHttpHandler.UpdateImageResult] decode payload with error %v \n", err)
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error read request body with error %v \n", err)
 		httpWriteResponse(w, &domain.ServerResponse{
-			Message: "Error decode payload",
+			Message: "Error read request body",
 		}, http.StatusInternalServerError)
 		return
 	}
 
-	if payload.Data.Filename == "" {
+	data, err := url.ParseQuery(string(body))
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error parsequery  %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error parse form",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	filename := data.Get("filename")
+	confidence := data.Get("confidence")
+	detectedAt := data.Get("detectedAt")
+	inferenceTime := data.Get("inferenceTime")
+	label := data.Get("label")
+
+	fConfidence, err := strconv.ParseFloat(confidence, 64)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error when convert confident from string to float64 with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error update result to database",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	fDetectedAt, err := strconv.ParseFloat(detectedAt, 32)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error when convert detected from string to float32 with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error update result to database",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	fInferenceTime, err := strconv.ParseFloat(inferenceTime, 32)
+	if err != nil {
+		log.Printf("[ImageHttpHandler.UpdateImageResult] error when convert inferenceTime from string to float32 with error %v \n", err)
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "Error update result to database",
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	if filename == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "filename should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.Data.Label == "" {
+	if label == "" {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "label should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.Data.InferenceTime == 0 {
+	if fInferenceTime == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "inferenceTime should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
 
-	if payload.Data.DetectedAt == 0 {
+	if fDetectedAt == 0 {
 		httpWriteResponse(w, &domain.ServerResponse{
 			Message: "detectedAt should be filled",
 		}, http.StatusBadRequest)
 		return
 	}
-	fmt.Println(reflect.ValueOf(payload.Data.Confidence).Kind())
+
+	if fConfidence == 0 {
+		httpWriteResponse(w, &domain.ServerResponse{
+			Message: "detectedAt should be filled",
+		}, http.StatusBadRequest)
+		return
+	}
+
+	payload.Filename = filename
+	payload.Label = label
+	payload.DetectedAt = float32(fDetectedAt)
+	payload.InferenceTime = float32(fInferenceTime)
+	payload.Confidence = fConfidence
 
 	err = i.imageService.UpdateImageResult(payload)
 	if err != nil {

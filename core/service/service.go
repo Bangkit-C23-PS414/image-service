@@ -40,12 +40,13 @@ func (i *ImageService) UploadImage(email string, image multipart.File) (*domain.
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
 		return nil, err
 	}
-	payload := domain.SendToMLPayload{
+	data := domain.SendToMLPayload{
 		Filename: res.Filename,
 		FileURL:  res.FileURL,
 	}
-	buf := new(bytes.Buffer)
-	err = json.NewEncoder(buf).Encode(&payload)
+	// buf := new(bytes.Buffer)
+	// err = json.NewEncoder(buf).Encode(&payload)
+	payload, err := json.Marshal(data)
 	if err != nil {
 		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
 		return nil, err
@@ -64,7 +65,7 @@ func (i *ImageService) UploadImage(email string, image multipart.File) (*domain.
 	// 	return nil, err
 	// }
 
-	req, err := http.NewRequest(http.MethodPut, "https://c23-ps414-ml-service.et.r.appspot.com/predict", buf)
+	req, err := http.NewRequest(http.MethodPut, "https://c23-ps414-ml-service.et.r.appspot.com/predict", bytes.NewReader(payload))
 	if err != nil {
 		log.Printf("[ImageService.UploadImage] error creating request with error %v \n", err)
 		return nil, err
@@ -94,7 +95,7 @@ func (i *ImageService) GetDetectionResults(email string, filter *domain.PageFilt
 	return res, nil
 }
 
-func (i *ImageService) UpdateImageResult(payload domain.UpdateImagePayload) error {
+func (i *ImageService) UpdateImageResult(payload domain.UpdateImagePayloadData) error {
 	err := i.repo.UpdateImageResult(payload)
 	if err != nil {
 		log.Printf("[ImageService.UpdateImageResult] error update image result with error %v \n", err)
