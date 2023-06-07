@@ -31,8 +31,8 @@ type UpdateImagePayload struct {
 }
 
 type SendToMLPayload struct {
-	Filename string `json:"filename"`
-	FileURL  string `json:"url"`
+	FileURL  string `avro:"url" json:"url"`
+	Filename string `avro:"filename" json:"filename"`
 }
 
 type ServerResponse struct {

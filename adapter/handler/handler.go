@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"image-service/core/domain"
@@ -11,14 +10,11 @@ import (
 	_ "image/png"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"google.golang.org/api/iterator"
@@ -124,67 +120,68 @@ func (i *ImageHttpHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[ImageHttpHandler.UploadImage] [/image-detections/create] success upload image to database from payload: %v \n", res)
 
-	exit := make(chan struct{})
-	var wg sync.WaitGroup
+	// exit := make(chan struct{})
+	// var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		data := domain.SendToMLPayload{
-			Filename: res.Filename,
-			FileURL:  res.FileURL,
-		}
-		payload, err := json.Marshal(data)
-		if err != nil {
-			log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
-			return
-		}
-		req, err := http.NewRequest(http.MethodPut, "https://c23-ps414-ml-service.et.r.appspot.com/predict", bytes.NewReader(payload))
-		if err != nil {
-			log.Printf("[ImageService.UploadImage] error creating request with error %v \n", err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		t := &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout:   60 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			// We use ABSURDLY large keys, and should probably not.
-			TLSHandshakeTimeout: 60 * time.Second,
-		}
-		client := &http.Client{
-			Transport: t,
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("[ImageService.UploadImage] error sending request to ML with error %v \n", err)
-			return
-		}
-		_, err = io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("[ImageService.UploadImage] error read response body with error %v \n", err)
-			return
-		}
-		log.Printf("finished send to ML model with payload %v \n", data)
-	}()
-	wg.Wait()
-	close(exit)
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	data := domain.SendToMLPayload{
+	// 		Filename: res.Filename,
+	// 		FileURL:  res.FileURL,
+	// 	}
+	// 	payload, err := json.Marshal(data)
+	// 	if err != nil {
+	// 		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
+	// 		return
+	// 	}
+	// 	req, err := http.NewRequest(http.MethodPost, "https://c23-ps414-ml-service.et.r.appspot.com/predict", bytes.NewReader(payload))
+	// 	if err != nil {
+	// 		log.Printf("[ImageService.UploadImage] error creating request with error %v \n", err)
+	// 		return
+	// 	}
+	// 	req.Header.Set("Content-Type", "application/json")
+	// 	t := &http.Transport{
+	// 		Dial: (&net.Dialer{
+	// 			Timeout:   60 * time.Second,
+	// 			KeepAlive: 30 * time.Second,
+	// 		}).Dial,
+	// 		// We use ABSURDLY large keys, and should probably not.
+	// 		TLSHandshakeTimeout: 60 * time.Second,
+	// 	}
+	// 	client := &http.Client{
+	// 		Transport: t,
+	// 	}
+	// 	resp, err := client.Do(req)
+	// 	if err != nil {
+	// 		log.Printf("[ImageService.UploadImage] error sending request to ML with error %v \n", err)
+	// 		return
+	// 	}
+	// 	_, err = io.ReadAll(resp.Body)
+	// 	if err != nil {
+	// 		log.Printf("[ImageService.UploadImage] error read response body with error %v \n", err)
+	// 		return
+	// 	}
+	// 	log.Printf("finished send to ML model with payload %v \n", data)
+	// }()
+	// wg.Wait()
+	// close(exit)
 
 	httpWriteResponse(w, &domain.ServerResponse{
 		Message: "Success",
 		Data:    res,
 	}, http.StatusAccepted)
-	for {
-		select {
-		case <-exit:
-			log.Println("finished processing and data has been sent to ML model")
-			return
-		default:
-			log.Printf("sending data to ML")
-			time.Sleep(2 * time.Second)
-		}
-	}
+	return
+	// for {
+	// 	select {
+	// 	case <-exit:
+	// 		log.Println("finished processing and data has been sent to ML model")
+	// 		return
+	// 	default:
+	// 		log.Printf("sending data to ML")
+	// 		time.Sleep(2 * time.Second)
+	// 	}
+	// }
 
 }
 
