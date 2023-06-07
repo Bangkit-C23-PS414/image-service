@@ -1,5 +1,10 @@
 package domain
 
+type UploadImageResponse struct {
+	Filename string `firestore:"filename,omitempty" json:"filename,omitempty"`
+	FileURL  string `firestore:"fileURL" json:"fileURL"`
+}
+
 type Image struct {
 	Email         string  `firestore:"email,omitempty" json:"email,omitempty"`
 	Filename      string  `firestore:"filename,omitempty" json:"filename,omitempty"`

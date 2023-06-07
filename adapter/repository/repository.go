@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"image"
 	"image-service/core/domain"
 	_ "image/jpeg"
 	_ "image/png"
@@ -15,7 +14,6 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
-	"github.com/bbrks/go-blurhash"
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -66,7 +64,7 @@ func NewImageRepository(ctx context.Context) (*ImageRepository, error) {
 	}, nil
 }
 
-func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domain.Image, error) {
+func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domain.UploadImageResponse, error) {
 	ctx := context.Background()
 	filename := uuid.New()
 	bktName := os.Getenv("CAPSTONE_IMAGE_BUCKET")
@@ -81,21 +79,21 @@ func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domai
 		return nil, err
 	}
 
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		log.Printf("[ImageRepository.UploadImage] error seeking with error %v \n", err)
-		return nil, err
-	}
-	img, _, err := image.Decode(file)
-	if err != nil {
-		log.Printf("[ImageRepository.UploadImage] error decode image with error %v \n", err)
-		return nil, err
-	}
-	hash, err := blurhash.Encode(3, 3, img)
-	if err != nil {
-		log.Printf("[ImageRepository.UploadImage] error when performing blur hash with error %v \n", err)
-		return nil, err
-	}
+	// _, err = file.Seek(0, 0)
+	// if err != nil {
+	// 	log.Printf("[ImageRepository.UploadImage] error seeking with error %v \n", err)
+	// 	return nil, err
+	// }
+	// img, _, err := image.Decode(file)
+	// if err != nil {
+	// 	log.Printf("[ImageRepository.UploadImage] error decode image with error %v \n", err)
+	// 	return nil, err
+	// }
+	// hash, err := blurhash.Encode(3, 3, img)
+	// if err != nil {
+	// 	log.Printf("[ImageRepository.UploadImage] error when performing blur hash with error %v \n", err)
+	// 	return nil, err
+	// }
 
 	objectUrl, err := generateSignedURL(i, filename.String())
 	if err != nil {
@@ -108,7 +106,6 @@ func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domai
 		Filename:  filename.String(),
 		CreatedAt: time.Now().UnixMilli(),
 		FileURL:   objectUrl,
-		BlurHash:  hash,
 	}
 
 	_, err = i.firestoreClient.Collection("images").Doc(filename.String()).Create(ctx, data)
@@ -118,7 +115,12 @@ func (i *ImageRepository) UploadImage(email string, file multipart.File) (*domai
 		return nil, err
 	}
 
-	return &data, nil
+	resp := domain.UploadImageResponse{
+		Filename: data.Filename,
+		FileURL:  objectUrl,
+	}
+
+	return &resp, nil
 }
 
 func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageFilter) ([]domain.Image, error) {
@@ -180,6 +182,23 @@ func (i *ImageRepository) GetDetectionResults(email string, filter *domain.PageF
 		result = append(result, data)
 	}
 	return result, nil
+}
+
+func (i *ImageRepository) UpdateBlurHash(filename, hash string) error {
+	ctx := context.Background()
+	_, err := i.firestoreClient.Collection("images").Doc(filename).Update(ctx, []firestore.Update{
+		{
+			Path:  "blurHash",
+			Value: hash,
+		},
+	})
+
+	if err != nil {
+		log.Printf("[ImageRepository.UpdateImageResult] error when update image result with error %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (i *ImageRepository) UpdateImageResult(payload domain.UpdateImagePayloadData) error {
