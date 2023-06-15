@@ -4,10 +4,12 @@
 
 Auth & Profile API with JWToken For Recoffeery App
 
-## Build
+## Build With
 
 * [Go](https://go.dev/)
-* [ex. Express](add aja)
+* Docker
+* Cloud Run
+* Artifact Registry
 
 ## API endpoints
 
