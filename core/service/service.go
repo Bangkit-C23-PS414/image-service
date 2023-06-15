@@ -13,13 +13,78 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/bbrks/go-blurhash"
-	"github.com/linkedin/goavro"
 	"google.golang.org/api/option"
 )
 
 type ImageService struct {
 	repo         port.ImageRepository
 	pubsubClient pubsub.Client
+}
+
+func sendToPubsub(i *ImageService, payload domain.SendToMLPayload) error {
+	data := domain.SendToMLPayload{
+		Filename: payload.Filename,
+		FileURL:  payload.FileURL,
+	}
+	var msg []byte
+	// avroSource, err := os.ReadFile("ml-payload.avsc")
+	// if err != nil {
+	// 	log.Printf("[ImageService.UploadImage] read avrosource with error %v \n", err)
+	// 	return nil, err
+	// }
+	// codec, err := goavro.NewCodec(string(avroSource))
+	// if err != nil {
+	// 	log.Printf("[ImageService.UploadImage] fail to use codec from avroSource with error %v \n", err)
+	// 	return nil, err
+	// }
+
+	buf := new(bytes.Buffer)
+	err := json.NewEncoder(buf).Encode(&data)
+	// payload, err := json.Marshal(data)
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
+		return err
+	}
+
+	log.Println(string(buf.String()))
+	topic := i.pubsubClient.Topic("upload-image")
+
+	p := map[string]interface{}{
+		"url":      payload.FileURL,
+		"filename": payload.Filename,
+	}
+	log.Println(p)
+	// cfg, err := topic.Config(context.TODO())
+	// cfg.SchemaSettings.Encoding = pubsub.EncodingJSON
+	// msg, err = codec.TextualFromNative(nil, payload)
+	// if err != nil {
+	// 	log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
+	// 	return nil, err
+	// }
+	// encoding := cfg.SchemaSettings.Encoding
+	// switch encoding {
+	// case pubsub.EncodingJSON:
+	// 	msg, err = codec.TextualFromNative(nil, payload)
+	// 	if err != nil {
+	// 		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
+	// 		return nil, err
+	// 	}
+	// default:
+	// 	log.Printf("[ImageService.UploadImage] invalid encoding with error %v \n", err)
+	// 	return nil, err
+	// }
+	log.Println(buf.String())
+	publishRes := topic.Publish(context.TODO(), &pubsub.Message{
+		Data: buf.Bytes(),
+	})
+
+	_, err = publishRes.Get(context.TODO())
+	if err != nil {
+		log.Printf("[ImageService.UploadImage] error when publish to pub/sub with error %v \n", err)
+		return err
+	}
+	log.Printf("avro msg %v: \n", string(msg))
+	return nil
 }
 
 func NewImageService(repo port.ImageRepository) (*ImageService, error) {
@@ -43,66 +108,6 @@ func (i *ImageService) UploadImage(email string, image multipart.File) (*domain.
 		log.Printf("[ImageService.UploadImage] error when uploading image with error %v \n", err)
 		return nil, err
 	}
-	data := domain.SendToMLPayload{
-		Filename: res.Filename,
-		FileURL:  res.FileURL,
-	}
-	var msg []byte
-	avroSource, err := os.ReadFile("ml-payload.avsc")
-	if err != nil {
-		log.Printf("[ImageService.UploadImage] read avrosource with error %v \n", err)
-		return nil, err
-	}
-	codec, err := goavro.NewCodec(string(avroSource))
-	if err != nil {
-		log.Printf("[ImageService.UploadImage] fail to use codec from avroSource with error %v \n", err)
-		return nil, err
-	}
-
-	buf := new(bytes.Buffer)
-	err = json.NewEncoder(buf).Encode(&data)
-	// payload, err := json.Marshal(data)
-	if err != nil {
-		log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
-		return nil, err
-	}
-
-	log.Println(string(buf.String()))
-	topic := i.pubsubClient.Topic("upload-image")
-
-	payload := map[string]interface{}{
-		"url":      res.FileURL,
-		"filename": res.Filename,
-	}
-	cfg, err := topic.Config(context.TODO())
-	cfg.SchemaSettings.Encoding = pubsub.EncodingJSON
-	// msg, err = codec.TextualFromNative(nil, payload)
-	// if err != nil {
-	// 	log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
-	// 	return nil, err
-	// }
-	encoding := cfg.SchemaSettings.Encoding
-	switch encoding {
-	case pubsub.EncodingJSON:
-		msg, err = codec.TextualFromNative(nil, payload)
-		if err != nil {
-			log.Printf("[ImageService.UploadImage] error when encode to json with error %v \n", err)
-			return nil, err
-		}
-	default:
-		log.Printf("[ImageService.UploadImage] invalid encoding with error %v \n", err)
-		return nil, err
-	}
-	publishRes := topic.Publish(context.TODO(), &pubsub.Message{
-		Data: msg,
-	})
-
-	_, err = publishRes.Get(context.TODO())
-	if err != nil {
-		log.Printf("[ImageService.UploadImage] error when publish to pub/sub with error %v \n", err)
-		return nil, err
-	}
-	log.Printf("avro msg %v: \n", string(msg))
 
 	return res, nil
 }
